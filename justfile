@@ -10,24 +10,32 @@ build-runtime:
 	case "{{os()}}" in
 		"macos")
 			shared_library_path=$( ls -t target/release/deps/libwasmer_runtime_c_api*.dylib | head -n 1 )
-			shared_library=libwasmer_runtime_c_api.dylib
+			static_library_path=$( ls -t target/release/deps/libwasmer_runtime_c_api*.a | head -n 1 )
+			shared_library=libwasmer.dylib
+			static_library=libwasmer.a
 			;;
 		"windows")
 			shared_library_path=$( ls -t target/release/deps/wasmer_runtime_c_api*.dll | head -n 1 )
-			shared_library=wasmer_runtime_c_api.dll
+			static_library_path=$( ls -t target/release/deps/wasmer_runtime_c_api*.lib | head -n 1 )
+			shared_library=wasmer.dll
+			static_library=wasmer.lib
 			;;
 		*)
 			shared_library_path=$( ls -t target/release/deps/libwasmer_runtime_c_api*.so | head -n 1 )
-			shared_library=libwasmer_runtime_c_api.so
+			static_library_path=$( ls -t target/release/deps/libwasmer_runtime_c_api*.a | head -n 1 )
+			shared_library=libwasmer.so
+			static_library=libwasmer.a
 	esac
 
 	# Link `wasmer/*wasmer_runtime_c_api.*`.
 	rm -f wasmer/${shared_library}
 	ln -s "../${shared_library_path}" wasmer/${shared_library}
+	rm -f wasmer/static/${static_library}
+	ln -s "../../${static_library_path}" wasmer/static/${static_library}
 
 # Build the `wasmer` library.
 build go-build-args='-v':
-	cd wasmer && go build {{go-build-args}} .
+	cd wasmer && go build {{go-build-args}} . && go build {{go-build-args}} -tags "static_build" .
 
 # Build the `go-wasmer` bin.
 build-bin go-build-args='-v':
@@ -54,6 +62,13 @@ test:
 	go test -test.v example_test.go
 	# Run the long examples.
 	go test -test.v $(find . -type f \( -name "example_*_test.go" \! -name "_example_import_test.go" \) )
+
+	# Run the tests using static lib.
+	GODEBUG=cgocheck=2 go test -tags "static_build" -test.v $(find test -type f \( -name "*_test.go" \! -name "example_*.go" \! -name "benchmark*.go" \) ) test/imports.go
+	# Run the short examples.
+	go test -tags "static_build" -test.v example_test.go
+	# Run the long examples.
+	go test -tags "static_build" -test.v $(find . -type f \( -name "example_*_test.go" \! -name "_example_import_test.go" \) )
 
 # Run benchmarks. Subjects can be `wasmer`, `wagon` or `life`. Filter is a regex to select the benchmarks.
 bench subject='wasmer' filter='.*':
